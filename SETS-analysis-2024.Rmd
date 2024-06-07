@@ -1,0 +1,284 @@
+---
+title: "Portfolio Analysis - 2024"
+author: "Jaffa Romain"
+date: "2024-04-25"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(ggplot2)
+##### USING COLLAPSED COMMENTS FILE
+SETs1 <- read_csv("LIWC-22 Results - SETs - LIWC Analysis.csv")
+SETs2 <- read_csv("LIWC-22 Results - data_latest_2024 - LIWC Analysis.csv") %>% select(-Emoji)
+SETs <- rbind(SETs1,SETs2)
+rm(SETs1, SETs2)
+# filtering out dimensions that aren't needed
+SETs <- SETs %>% select(-c(Segment, WC, WPS, A2, C2, D2, D4, E1, E2, E3, Dic, BigWords, WPS)) %>% filter(Course != "IMI202H5" & Course != "JRE420H1") # STEM students minoring in business 
+# filter out dimensions with score = 0 across courses
+
+# distinguish between UTM vs UTSC
+SETs <- SETs %>% filter(Course %in% c("MGHC02H3", "MGTC90H3","MGHD28H3", "MGM360H5", 
+                     "MGHB02H3",  "MGT262H5", "MGHB12H3", "MGHC52H3", "MGT461H5","MGHC23H3", "MGHC53H3"
+))
+SETs <- SETs %>% mutate(course = case_when(Course ==  "MGHC02H3" ~ "Leadership Skills", 
+                                                   Course == "MGTC90H3" ~ "Leadership Skills",
+                                                   Course == "MGHD28H3" ~ "Compensation", 
+                                                   Course == "MGM360H5" ~ "Compensation",
+                                                   Course == "MGHB02H3"~ "Organizational Behavior", 
+                                                   Course ==  "MGT262H5" ~  "Organizational Behavior",
+                                                   Course == "MGHB12H3" ~ "Human Resources",
+                                                   Course == "MGHC52H3" ~"Negotiation", # elective
+                                           Course == "MGT461H5" ~"Negotiation", # UTM
+                                           Course == "MGHC53H3" ~"Labour Relations"))
+# diversity in the workplace - elective
+
+
+data_long <- SETs %>% pivot_longer(cols = Analytic:OtherP, names_to = "Dimension", values_to = "Score")
+
+SETs$`Q9 mean`<- as.numeric(SETs$`Q9 mean`)
+SETs$`Q10 mean`<-as.numeric(SETs$`Q10 mean`)
+SETs$Mean5<-as.numeric(SETs$Mean5)
+SETs$Mean3<-as.numeric(SETs$Mean3)
+```
+# Correlation between average question ratings and LIWC scores
+# correlation between q3 and liwc scores
+```{r, echo=FALSE}
+######################## MEAN PLOTS ######################## 
+
+# Highest to Lowest LIWC Scores
+data_long  %>% group_by(Dimension) %>% mutate(m = mean(Score)) %>% 
+  filter(m > 1 ) %>% ungroup() %>% filter(Dimension %in% c("Analytic", "Linguistic", 
+                                                               "Tone", "Clout", "Authentic", "Social", "Cognition")) %>%
+# facet wrap top ten measures then display score by course
+  ggplot(mapping = (aes(x = reorder(Dimension,(-m)), y = m))) + geom_bar(position = "dodge", stat = "identity") + coord_flip() + 
+  labs(y = "Average Percentage of Word Use", x = "Dimension") + theme_classic()
+
+
+plotmeansdt <- data_long %>% group_by(Dimension) %>% mutate(m = mean(Score)) %>% 
+  filter(m > 1 ) %>% ungroup() %>% filter(Dimension %in% c("Analytic", "Linguistic", 
+                                                           "Tone", "Clout", "Authentic", "Social", "Cognition"))
+# facet wrap top ten measures then display score by course
+###### Analytic, Linguistic, Tone, Clout, function, Authentic, Allpunc, Social, cogproc, socbehav
+
+library(ggthemr)
+ggthemr("fresh")
+ggthemr::set_swatch(c("#111111", "#65ADC2", "#753d67", "#98c9a3"
+          , "#316675", "#168E7F"
+          , "#109B37"))
+plotmeansdt  %>% group_by(Dimension, course) %>% mutate(m = mean(Score)) %>% filter(course != "Human Resources") %>%
+  ggplot(aes(x = Dimension, y = m, fill = course)) + 
+  geom_bar(position = "dodge", stat = "identity")  + 
+  labs(y = "Average Percentage of Word Use", x = "Dimension") + theme_classic() +
+  ylim(0, 80)
+```
+
+# Classes related to role playing
+```{r, echo=F}
+######################## CORRELATIONS ######################## 
+
+# sample comments
+# matrix - fig.13 
+ SETcordat <- SETs %>% select(c("Analytic", "Linguistic", 
+                                 "Tone", "Clout", "Authentic", "Social", "Cognition"))
+ 
+corrdatmeans <- SETs %>% select(Mean1:`Q11 mean`)
+
+corrdat <- cbind(SETcordat, corrdatmeans)
+
+M <- cor(SETcordat, corrdatmeans, method = "pearson",use="complete.obs")
+library(corrplot)
+
+M2 <- cor(corrdat, method = "pearson",use="complete.obs")
+corrplot(M, order = "hclust", addrect = 2)
+
+pvals <- cor.mtest(M2, conf.level = 0.95)
+
+corrplot(M, method = 'color')
+
+corrplot(M2, p.mat = pvals$p, method = 'color', diag = FALSE, type = 'upper',
+         sig.level = c(0.001, 0.01, 0.05), pch.cex = 0.9, tl.cex = 0.8,
+         insig = 'label_sig', pch.col = 'grey20', order = 'AOE')
+
+######################## More Means ######################## 
+
+# LIWC and Mean scores across classes and years
+
+# LIWC and mean scores across 
+datliwc <-  SETs %>% select(c(Linguistic, Analytic, 
+                                                   Tone, Clout, Authentic, cogproc, Social))
+
+M2 <- cor(datliwc,  method = "pearson",use="complete.obs")
+
+corrplot(M2, method = 'number', type = "lower", order = "hclust", diag=FALSE) # colorful number
+
+# function for means plot
+
+# pull examples
+
+```
+# Plotting means by Year
+```{r, echo=F}
+means_plot_year <- function(dt, var_name, yaxislabel){
+    var_sym <- sym(var_name)  # Convert to symbol for proper reference
+dt %>% filter(!is.na(Term)&!is.na(Course)) %>% separate(Term, into = c('Term', 'Year'), sep = "_") %>% 
+  group_by(course, Year) %>% summarize(mn = mean(!!var_sym)) %>% 
+  filter(!is.na(Year))  %>%
+  ggplot(aes(x = Year, y = mn, group = course))  + 
+  geom_line(aes(color = course)) + geom_point(color = "black") + labs(y = yaxislabel, color="Course")}
+
+
+SETs$Mean9 = SETs$`Q9 mean`
+SETs$Mean10 = SETs$`Q10 mean`
+SETs$Mean11 = SETs$`Q11 mean`
+for (i in 1:6){
+print(means_plot_year(SETs, paste0("Mean",i),paste("Mean",i )))
+}
+
+for (i in 1:6){
+SETsnew <- SETs %>% filter(course!="Human Resources")
+print(means_plot_year(SETsnew, paste0("Mean",i),paste("Mean",i )))
+}
+
+for (i in 9:11){
+print(means_plot_year(SETs, paste0("Mean",i),paste("Mean",i )))
+}
+
+for (i in 9:11){
+SETsnew <- SETs %>% filter(course!="Human Resources")
+print(means_plot_year(SETsnew, paste0("Mean",i),paste("Mean",i )))
+}
+
+
+```
+
+
+```{r}
+# SETs by Year
+SETs <- SETs%>% separate(Term, into = c("Term", "Year"), sep = "_")
+
+# Group by Year and calculate the mean for each numeric column
+collapsed_SETs <- SETs %>%
+  group_by(Year,Course,course) %>%
+  summarize(across(where(is.numeric), mean, na.rm = TRUE))
+# MGTB29, MGTC24, MGTC23
+C23 <- SETs %>% filter(Course == "MGHC23H3")  
+#### Labor Issues and Diversity
+SETS_div <- collapsed_SETs %>% filter(Course == "MGHC23H3" | course == "Labour Relations")
+
+# filter out dimensions with score = 0 across courses
+SETS_div <- SETS_div %>% mutate(Course = ifelse(Course ==  "MGHC23H3",  "Diversity in the Workplace", "Labour Issues"))
+data_long_div <- SETS_div %>% pivot_longer(cols = Analytic:OtherP, names_to = "Dimension", values_to = "Score")
+
+######################## MEAN PLOTS ######################## 
+
+plotmeansdiv <- data_long_div %>% group_by(Dimension) %>% mutate(m = mean(Score)) %>% 
+  filter(m > 1 ) %>% ungroup() %>% filter(Dimension %in% c("Analytic", "Linguistic", 
+                                                           "Tone", "Clout", "Authentic", "Social", "Cognition"))
+# facet wrap top ten measures then display score by course
+###### Analytic, Linguistic, Tone, Clout, function, Authentic, Allpunc, Social, cogproc, socbehav
+
+library(ggthemr)
+ggthemr("fresh")
+ggthemr::set_swatch(c("#111111", "#65ADC2", "#753d67", "#98c9a3"
+                      , "#316675", "#168E7F"
+                      , "#109B37"))
+plotmeansdiv  %>% group_by(Dimension, Course) %>% mutate(m = mean(Score)) %>%
+  ggplot(aes(x = Dimension, y = m, fill = Course)) + 
+  geom_bar(position = "dodge", stat = "identity")  + 
+  labs(y = "Average Percentage of Word Use", x = "Dimension") + theme_classic() +
+  ylim(0, 80)
+
+library(kableExtra)
+
+
+
+
+```
+# Pre vs. Post-COVID
+```{r}
+collapsed_SETs <- collapsed_SETs %>% filter(!is.na(Year)) %>% mutate(Year = as.numeric(Year)) %>% mutate(interv = case_when(Year >= 2020 ~ 1, Year <2020~0))
+lmm1 <- lmerTest::lmer(Mean1 ~ Year * interv + (1|Course), data = collapsed_SETs)
+summary(lmm1)
+library(AICcmodavg)
+margpred <- predictSE(lmm1, collapsed_SETs)$fit
+margse <- predictSE(lmm1, collapsed_SETs)$se.fit
+marglcl <- margpred - qnorm(1-0.05/2) * margse
+margucl <- margpred + qnorm(1-0.05/2) * margse
+margpctpred <- margpred 
+margpctlcl <- marglcl 
+margpctucl <- margucl
+
+margpreds <- as.data.frame(cbind(collapsed_SETs, margpctpred=margpctpred,  margpctlcl=margpctlcl,  margpctucl=margpctucl)) 
+
+figdata <- collapsed_SETs 
+figdata$margpctpred <- margpreds[match(figdata$Year,
+                                       margpreds$Year), "margpctpred"]
+figdata$margpctlcl <- margpreds[match(figdata$Year,
+                                       margpreds$Year), "margpctlcl"]
+figdata$margpctucl <- margpreds[match(figdata$Year,
+                                       margpreds$Year), "margpctucl"]
+
+ggplot(data = figdata, aes(y = Mean2, x = Year)) +
+  geom_point(alpha = 0.5) + 
+  geom_point(aes(y = margpctpred, x = Year), color = "black") + 
+  geom_line(aes(y = margpctlcl, x = Year), alpha = 0.5) +
+  geom_line(aes(y = margpctucl, x = Year), alpha = 0.5) +
+  geom_ribbon(aes(ymin = margpctlcl, ymax = margpctucl), alpha = 0.2) + xlim(2012, 2024) + 
+  labs(y = "Mean2",
+       x = "Year") + 
+  theme_bw() +
+  geom_vline(xintercept = 2020, color = "red") +
+  geom_vline(xintercept = 2021, linetype="dashed", color = "forestgreen") # color = Course 
+# marginal predictive model - add explanation
+
+# add item on enthusiasm 
+# 
+```
+
+
+# required vs not required courses
+```{r}
+SETs1 <- read_csv("LIWC-22 Results - SETs - LIWC Analysis.csv")
+SETs2 <- read_csv("LIWC-22 Results - data_latest_2024 - LIWC Analysis.csv") %>% select(-Emoji)
+SETs <- rbind(SETs1,SETs2)
+rm(SETs1, SETs2)
+# filtering out dimensions that aren't needed
+SETs <- SETs %>% select(-c(Segment, WC, WPS, A2, C2, D2, D4, E1, E2, E3, Dic, BigWords, WPS)) %>% mutate(`Course Type`=
+case_when(Course == "IMI202H5" ~ "Not Required", Course =="JRE420H1"~"Not Required", TRUE ~"Required")) 
+
+means_plot_year <- function(dt, var_name, yaxislabel){
+    var_sym <- sym(var_name)  # Convert to symbol for proper reference
+dt %>% filter(!is.na(Term)) %>% separate(Term, into = c('Term', 'Year'), sep = "_") %>% 
+  group_by(`Course Type`, Year) %>% summarize(mn = mean(!!var_sym)) %>% 
+  filter(!is.na(Year))  %>%
+  ggplot(aes(x = Year, y = mn, group = `Course Type`))  + 
+  geom_line(aes(color = `Course Type`)) + geom_point(color = "black") + labs(y = yaxislabel, color="Course Type")}
+
+SETs$`Q9 mean`<- as.numeric(SETs$`Q9 mean`)
+SETs$`Q10 mean`<-as.numeric(SETs$`Q10 mean`)
+SETs$Mean5<-as.numeric(SETs$Mean5)
+SETs$Mean3<-as.numeric(SETs$Mean3)
+SETs$Mean9 = SETs$`Q9 mean`
+SETs$Mean10 = SETs$`Q10 mean`
+SETs$Mean11 = SETs$`Q11 mean`
+for (i in 1:6){
+print(means_plot_year(SETs, paste0("Mean",i),paste("Mean",i )))
+}
+
+for (i in 9:11){
+print(means_plot_year(SETs, paste0("Mean",i),paste("Mean",i )))
+}
+```
+
+
+- Diversity in the workplace 
+
+- 
+
+Next steps:
+- 

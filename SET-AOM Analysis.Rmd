@@ -1,0 +1,271 @@
+---
+title: "SADCAT x LIWC PCA Analysis"
+author: "Jaffa Romain"
+date: "2022-12-08"
+output: pdf_document
+---
+
+```{r data set up, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(readxl)
+
+LIWC_T <- read_excel("liwc-T.xlsx") %>% filter(!is.na(Course))
+dataR  <- read_csv("Extract_By_Year.csv")
+LIWC_T <-LIWC_T %>% rename(S = Section, Section = Semester) %>% rename(Semester = S) %>% mutate(Discipline = "Chemistry")
+SADCAT_R <- read_csv("DrR-SADCAT.csv")  %>% cbind(dataR)
+SADCAT_T <- read_excel("sadcat-T.xlsx")
+LIWC_R <- read_csv("LIWC-22 Results - Extract_By_Year - LIWC Analysis.csv") %>% mutate(Discipline = "Management")
+
+# Prof T data
+Th <- cbind(SADCAT_T, LIWC_T)
+R <- cbind(SADCAT_R, LIWC_R)
+
+R$Q1 = R$Mean1
+R$Q2 = R$Mean2
+R$Q3 = R$Mean3
+R$Q4 = R$Mean4
+R$Q5 = R$Mean5
+R$Q6 = R$Mean6
+R$Q9 = R$`Q9 mean`
+R$Q10 = R$`Q10 mean`
+R$Q11 = R$`Q11 mean`
+R$`Comment 7` =  R$`Comment for Q7`
+R$`Comment 8` = R$`Comment for Q8`
+
+# full join on all data
+common_vars <- intersect(names(Th), names(R))
+Th <- Th %>% select(common_vars)
+
+R <- R %>% select(common_vars)
+
+full_data <- rbind(Th,R)
+
+write.csv(full_data, "full_data.csv")
+```
+# Variables:
+## _dic variables indicate how many words in the text were coded into that dimension, regardless of whether the response is high or low (e.g., for sociability, both friendly and unfriendly are counted)
+# _dic_hi and _dic_lo variables indicate how many words in the text were coded as being high and low (respectively) on the dimension (if the word is not in the dimension, it is not counted here)
+# _dic_percent is simply the _dic variable divided by the total number of words in the text (so, percentage of words in the text coded into the dimension)
+# _dic_binary indicates whether the text includes the dimension at all, 0 = No, 1 = yes
+# _dirx indicates the direction of the dimension in the text. It is calculated as dic_hi - dic_lo, thus higher scores indicate more high-directional words in the text for that dimension, lower scores indicate more low-directional words in the text for that dimension. A score of 0 indicates either equal number of words in the dimension or no words related to the dimension (thus no directional bias).
+
+# PCA PREP
+```{r}
+library(psych)
+library(factoextra)
+
+# remove unnecessesary linguistic variables (word count, number of adjectives, number of big words,etc)
+PCAdata <- full_data  %>% select(-c(None2y,BigWords,Dic,WC, WPS, Course, Section, `ntoken(toks)`,`ntype(toks)` , `Comment 7`, `Comment 8`, string_lemma, valuex, Discipline)) %>% select(!contains(c("binary","percent", "dirx"))) %>% select(!ends_with("_dic"))
+
+PCAdata2<- PCAdata[,apply(PCAdata, 2, function(x) all(x > 0))]  # filter data with low cell counts
+# STANDARDIZE DATA
+# to transform all variables to the same scale
+# Average scores below the mean of 0 indicated that participants used fewer words and phrases from the word categories compared with the mean
+                
+PCA_scaled <- PCAdata2 %>% mutate_all(~scale(.) %>% as.vector)
+
+ 
+
+
+###### Preliminary Diagnostic Checks ######
+# Bartlett's test for  correlation matrix
+# The null hypothesis for this test is that the intercorrelation matrix comes from a noncollinear populaton or simply that there is nocollinearity between the variables, which would render PCA impossible as it depends on the construction of a linear combination of the variables.
+# cortest.mat(PCA_scaled)
+
+
+####### squared multiple correlations (smc) #######
+smc1= smc(PCA_scaled) # all > 0.3 - no factors need to be removed
+
+# Determining number of factors to extract
+library(nFactors)
+library(factoextra)
+# common rule - atleast 70% of total variation explained with eigenvalues of at least 1
+pca=prcomp(PCA_scaled)
+# rotation - implement a prior shuffling of varimax rotation - better captures explained variance
+summary(pca)
+
+
+# scree - determined 4 key dimensions
+fviz_screeplot(pca, type="lines", addlabels=TRUE, ylim = c(0, 80), main=" PCA Scree Plot"
+               )
+get_eig(pca)
+
+# 5 is optimal
+
+library(ggfortify)
+
+# loadings
+
+
+res.pc <-principal(PCA_scaled, nfactors=4, rotate="varimax")
+# cronbach alpha 
+
+library(FactoMineR)
+res2 <- PCA(PCA_scaled, graph = FALSE, scale.unit = T)
+
+loadings <-res2$var$cor # table with factor loadings
+loadings
+
+library(kableExtra)
+#vars = as.data.frame(res.pc$loadings)
+
+vars = data.frame(matrix(as.numeric(res.pc$loadings), attributes(res.pc$loadings)$dim, dimnames=attributes(res.pc$loadings)$dimnames))
+
+
+  vars %>% kable(caption = "Correlations between Principal Components and the original scores.", digits = 2) %>% save_kable("tbl1.jpg")
+
+
+loadings <- as.matrix.data.frame(res.pc$loadings)
+colnames(loadings) <- c("PC1", "PC2", "PC3", "PC4")
+rownames(loadings) <- colnames(PCA_scaled)
+install.packages("pca3d")
+library(pca3d)
+
+library(Hmisc)
+
+res <- cor(PCAdata)
+library("PerformanceAnalytics")
+chart.Correlation(PCAdata2, histogram=TRUE, pch=19)
+
+rcorr(as.matrix(res), type = "pearson")
+
+library(corrplot)
+
+
+full_data %>% head()
+```
+
+```{r}
+library(reshape2)
+
+full_data$`Ability - High & Positive` <- rowMeans(full_data[,c('ability_dic_hi', 'ability_dic_pos')], na.rm=TRUE)
+
+full_data$`Competence - High & Positive` <- rowMeans(full_data[,c('competence_dic_hi', 'competence_dic_pos')], na.rm=TRUE)
+  
+  
+cormat_T <- full_data %>% select(Course, Discipline,   `Ability - High & Positive` , `Competence - High & Positive`, Analytic, Clout, Authentic, Tone, Social) %>% filter(Course != "JRE420H1")  %>% filter(Discipline == "Chemistry") %>% select(!c(Course, Discipline)) %>% cor() 
+
+
+cormat_R <- full_data %>% select(Course, Discipline,   `Ability - High & Positive` , `Competence - High & Positive`, Analytic, Clout, Authentic, Tone, Social) %>% filter(Course != "JRE420H1")  %>% filter(Discipline == "Management") %>% select(!c(Course, Discipline)) %>% cor()
+
+# Get lower triangle of the correlation matrix
+  get_lower_tri<-function(cormat){
+    cormat[upper.tri(cormat)] <- NA
+    return(cormat)
+  }
+  # Get upper triangle of the correlation matrix
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+
+upperR <- get_upper_tri(cormat_R)
+lowerT <- get_lower_tri(cormat_T)
+melted_cormatT <- melt(cormat_T, na.rm = T) 
+melted_cormatT$Discipline <- "Chemistry"
+melted_cormatR <- melt(cormat_R, na.rm = T)
+melted_cormatR$Discipline <- "Management"
+
+
+
+full_mat <- rbind(melted_cormatT, melted_cormatR)
+full_mat$Var1 <- factor(full_mat$Var1, levels =c( "Analytic",  "Authentic", "Clout", "Social", "Tone","Q1", "Q3", "Q4", "Q6","Ability - High & Positive" , "Competence - High & Positive"))
+full_mat$Var2 <- factor(full_mat$Var2, levels =c( "Analytic",  "Authentic", "Clout", "Social", "Tone","Q1", "Q3", "Q4", "Q6","Ability - High & Positive" , "Competence - High & Positive"))
+
+library(ggplot2)
+library(pBrackets)
+
+
+ggplot(data = full_mat,aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+    name="Pearson\nCorrelation") + facet_wrap(~Discipline) + 
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 30, vjust = 1, 
+    size = 10, hjust = 1))+
+ coord_fixed() + labs(x = "", y = "")
+```
+
+```{r}
+cor_full <-  full_data %>% select(Course, Discipline,   `Ability - High & Positive` , `Competence - High & Positive`, Analytic, Clout, Authentic, Tone, Social, Q1, Q3, Q4, Q6) %>% filter(Course != "JRE420H1")  %>% select(!c(Discipline, Course)) %>% mutate( Q3 = as.numeric(Q3))  %>% cor(use = "complete.obs") 
+
+
+lowerfull <- get_upper_tri(cor_full) 
+melted_cormat_full <- melt(cor_full, na.rm = T) %>% mutate(Var1 = factor(Var1, levels = c( "Analytic", "Clout", "Authentic", "Social", "Tone","Q1", "Q3", "Q4", "Q6","Ability - High & Positive" , "Competence - High & Positive"))) %>% mutate(Var2 = factor(Var2, levels = c( "Analytic", "Clout", "Authentic", "Social", "Tone","Q1", "Q3", "Q4", "Q6","Ability - High & Positive" , "Competence - High & Positive")))
+
+
+ggplot(data = melted_cormat_full, 
+       aes(Var2, Var1, label = , fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 30, vjust = 1, 
+    size = 10, hjust = 1))+
+ coord_fixed() + labs(x = "", y = "") +scale_x_discrete(my_order) +
+  scale_y_discrete(limits = my_order) + theme_classic()
+
+full.mat <- Hmisc::rcorr(as.matrix(cor_full))
+
+dat=full_data %>% select(Course, Discipline,   `Ability - High & Positive` , `Competence - High & Positive`, Analytic, Clout, Authentic, Tone, Social, Q1, Q3, Q4, Q6) %>% filter(Course != "JRE420H1")  %>% select(!c(Discipline, Course)) %>% mutate( Q3 = as.numeric(Q3))
+
+cors <- function(df) { 
+  
+   # turn all three matrices (r, n, and P into a data frame)
+   M <- Hmisc::rcorr(as.matrix(df))
+   # return the three data frames in a list return(Mdf)
+   Mdf <- map(M, ~data.frame(.x))
+}
+
+
+formatted_cors <- function(df){
+ cors(df) %>%
+ map(~rownames_to_column(.x, var="measure1")) %>%
+ map(~pivot_longer(.x, cols=-measure1, names_to = "measure2")) %>% 
+ bind_rows(.id = "id") %>%
+ pivot_wider(names_from = id, values_from = value) %>%
+ mutate(sig_p = ifelse(P < .06, T, F), p_if_sig = ifelse(P <.05, P, NA), r_if_sig = ifelse(P <.05, r, NA)) 
+}
+
+ formatted_dat=formatted_cors(dat)
+```
+```{r}
+   
+  formatted_dat %>% mutate(measure1 = factor(measure1, levels = c( "Tone","Analytic", "Clout", "Authentic", "Social" ,"Q1", "Q3", "Q4", "Q6","Ability - High & Positive" , "Competence - High & Positive")),measure2 = str_replace(measure2, '...H', ' - H')) %>% mutate(measure2 = str_replace(measure2, 'h...P', 'h & P')) %>%mutate(measure2 = factor(measure2, levels = c( "Tone","Analytic", "Clout", "Authentic", "Social" ,"Q1", "Q3", "Q4", "Q6","Ability - High & Positive" , "Competence - High & Positive")))%>% mutate(measure1=fct_rev(measure1))%>% 
+ ggplot(aes(measure2, measure1, fill=r, label=round(r_if_sig,2))) +
+ geom_tile() +
+ labs(x = NULL, y = NULL, fill = "Pearson's\nCorrelation", title="", subtitle="Only significant Pearson's correlation coefficients shown") +
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+ geom_text() +
+ theme_classic() +
+ scale_x_discrete(expand=c(0,0)) +
+ scale_y_discrete(expand=c(0,0)) + # minimal theme
+ theme(axis.text.x = element_text(angle = 30, vjust = 1, 
+    size = 10, hjust = 1))
+ 
+ 
+```
+
+
+
+
+I found the course intellectually stimulating
+
+The course provided me with a deeper understanding of the subject matter.
+
+The instructor (Phanikiran Radhakrishnan) created an atmosphere that was conducive to my learning.
+
+Course projects, assignments, tests, and/or exams improved my understanding of the course material.
+
+Course projects, assignments, tests and/or exams provided opportunity for me to demonstrate an understanding of the course material.
+
+Overall, the quality of my learning experience in this course was....
+ 
+
